@@ -199,6 +199,17 @@ body {
   font-weight: 600;
 }
 
+.editor-actions button.danger {
+  margin-right: auto;
+  background: #fff;
+  border-color: #f2b8b5;
+  color: #d92d20;
+}
+
+.editor-actions button.danger:hover {
+  background: #fef1ef;
+}
+
 .map-area {
   flex: 1;
   position: relative;

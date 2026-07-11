@@ -1,7 +1,8 @@
 import { useState } from 'react'
 
-export default function EdgeEditor({ sourceLabel, targetLabel, onSubmit, onCancel }) {
-  const [label, setLabel] = useState('')
+export default function EdgeEditor({ sourceLabel, targetLabel, initialLabel = '', onSubmit, onDelete, onCancel }) {
+  const [label, setLabel] = useState(initialLabel)
+  const isEdit = onDelete != null
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -11,7 +12,7 @@ export default function EdgeEditor({ sourceLabel, targetLabel, onSubmit, onCance
   return (
     <form className="editor-overlay" onSubmit={handleSubmit}>
       <div className="editor-box">
-        <h3>연결선 추가</h3>
+        <h3>{isEdit ? '연결선 수정' : '연결선 추가'}</h3>
         <p>{sourceLabel} → {targetLabel}</p>
         <label>
           관계 라벨
@@ -23,8 +24,11 @@ export default function EdgeEditor({ sourceLabel, targetLabel, onSubmit, onCance
           />
         </label>
         <div className="editor-actions">
+          {isEdit && (
+            <button type="button" className="danger" onClick={onDelete}>삭제</button>
+          )}
           <button type="button" onClick={onCancel}>취소</button>
-          <button type="submit">연결</button>
+          <button type="submit">{isEdit ? '저장' : '연결'}</button>
         </div>
       </div>
     </form>

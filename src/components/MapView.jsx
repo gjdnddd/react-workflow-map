@@ -72,6 +72,19 @@ function computeCenteredViewport(nodes, containerWidth, containerHeight) {
   }
 }
 
+// 중심점끼리 잇지 않고, 상대 노드 방향으로 카드 경계선까지만 선을 당겨서
+// 연결선이 카드 위로 겹쳐 그려지지 않도록 한다.
+function trimToRect(cx, cy, towardX, towardY, halfW, halfH) {
+  const dx = towardX - cx
+  const dy = towardY - cy
+  if (dx === 0 && dy === 0) return { x: cx, y: cy }
+  const scale = Math.min(
+    dx !== 0 ? halfW / Math.abs(dx) : Infinity,
+    dy !== 0 ? halfH / Math.abs(dy) : Infinity,
+  )
+  return { x: cx + dx * scale, y: cy + dy * scale }
+}
+
 // React Flow의 내장 엣지 렌더링은 ResizeObserver 기반 노드 측정에 의존하는데,
 // 일부 임베드/자동화 환경에서 측정이 발화하지 않아 엣지가 그려지지 않는 경우가 있다.
 // 노드 위치를 이미 직접 계산해 알고 있으므로, 연결선은 별도 SVG 오버레이로 직접 그린다.
@@ -91,28 +104,28 @@ function curvedPath(x1, y1, x2, y2) {
   return { d: `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`, labelX: cx, labelY: cy }
 }
 
-function EdgeOverlay({ nodes, centerId, siblingEdges, viewport }) {
+function EdgeOverlay({ nodes, centerId, siblingEdges, viewport, onEdgeAction }) {
   const byId = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes])
 
   function centerOf(node) {
     return { x: node.position.x + NODE_WIDTH / 2, y: node.position.y + NODE_HEIGHT / 2 }
   }
 
+  function trimmedPath(fromNode, toNode) {
+    const c1 = centerOf(fromNode)
+    const c2 = centerOf(toNode)
+    const p1 = trimToRect(c1.x, c1.y, c2.x, c2.y, NODE_WIDTH / 2, NODE_HEIGHT / 2)
+    const p2 = trimToRect(c2.x, c2.y, c1.x, c1.y, NODE_WIDTH / 2, NODE_HEIGHT / 2)
+    return curvedPath(p1.x, p1.y, p2.x, p2.y)
+  }
+
   const parentLines = nodes
     .filter((n) => n.id !== centerId)
-    .map((n) => {
-      const c = centerOf(byId[centerId])
-      const t = centerOf(n)
-      return { id: `parent-${n.id}`, ...curvedPath(c.x, c.y, t.x, t.y) }
-    })
+    .map((n) => ({ id: `parent-${n.id}`, ...trimmedPath(byId[centerId], n) }))
 
   const customLines = siblingEdges
     .filter((e) => byId[e.source] && byId[e.target])
-    .map((e) => {
-      const s = centerOf(byId[e.source])
-      const t = centerOf(byId[e.target])
-      return { id: e.id, label: e.label, ...curvedPath(s.x, s.y, t.x, t.y) }
-    })
+    .map((e) => ({ id: e.id, label: e.label, ...trimmedPath(byId[e.source], byId[e.target]) }))
 
   return (
     <svg className="edge-overlay" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
@@ -127,9 +140,21 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, viewport }) {
         ))}
         {customLines.map((l) => (
           <g key={l.id}>
+            {/* 실제 보이는 선보다 넓은 투명 히트 영역 — 클릭하기 쉽게 */}
+            <path
+              d={l.d}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={16}
+              style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+              onClick={() => onEdgeAction?.(l.id)}
+            />
             <path d={l.d} fill="none" stroke="#ff6d5a" strokeWidth={2} markerEnd="url(#arrow)" />
             {l.label && (
-              <g>
+              <g
+                style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                onClick={() => onEdgeAction?.(l.id)}
+              >
                 <rect
                   x={l.labelX - (l.label.length * 3.6 + 10)}
                   y={l.labelY - 11}
@@ -159,7 +184,7 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, viewport }) {
   )
 }
 
-function MapViewInner({ centerNode, children, siblingEdges, connectSelection, onNodeAction }) {
+function MapViewInner({ centerNode, children, siblingEdges, connectSelection, onNodeAction, onEdgeAction }) {
   const nodes = useMemo(
     () => buildRadialLayout(centerNode, children, connectSelection),
     [centerNode, children, connectSelection],
@@ -206,7 +231,13 @@ function MapViewInner({ centerNode, children, siblingEdges, connectSelection, on
         <Background variant="dots" gap={20} size={1.5} color="#d7d9e3" bgColor="#f6f6f9" />
         <Controls showInteractive={false} />
       </ReactFlow>
-      <EdgeOverlay nodes={nodes} centerId={centerNode.id} siblingEdges={siblingEdges} viewport={viewport} />
+      <EdgeOverlay
+        nodes={nodes}
+        centerId={centerNode.id}
+        siblingEdges={siblingEdges}
+        viewport={viewport}
+        onEdgeAction={onEdgeAction}
+      />
     </div>
   )
 }

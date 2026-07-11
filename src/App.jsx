@@ -16,7 +16,7 @@ const STATUS_LABEL = {
 }
 
 function App() {
-  const { nodes, edges, status, error, addNode, deleteNode, addEdge } = useMapData()
+  const { nodes, edges, status, error, addNode, deleteNode, addEdge, deleteEdge, updateEdge } = useMapData()
   const { currentNode, children, goInto, goBack, goToRoot, path } = useMapNavigation(nodes, 'hq')
 
   const [mode, setMode] = useState('navigate') // navigate | connect | delete
@@ -24,6 +24,7 @@ function App() {
   const [showNodeEditor, setShowNodeEditor] = useState(false)
   const [showTokenModal, setShowTokenModal] = useState(false)
   const [pendingEdge, setPendingEdge] = useState(null) // { source, target }
+  const [editingEdge, setEditingEdge] = useState(null) // 기존 연결선(edge 레코드)
 
   if (status === 'loading' || !currentNode) {
     return <div className="loading-screen">불러오는 중...</div>
@@ -60,6 +61,12 @@ function App() {
   function toggleMode(next) {
     setConnectFrom(null)
     setMode((prev) => (prev === next ? 'navigate' : next))
+  }
+
+  function handleEdgeClick(edgeId) {
+    if (mode !== 'navigate') return // 연결/삭제 모드 중엔 노드 조작에 집중, 엣지 클릭은 평상시에만
+    const edge = edges.find((e) => e.id === edgeId)
+    if (edge) setEditingEdge(edge)
   }
 
   return (
@@ -102,6 +109,7 @@ function App() {
             siblingEdges={siblingEdges}
             connectSelection={connectFrom ? [connectFrom] : []}
             onNodeAction={handleNodeAction}
+            onEdgeAction={handleEdgeClick}
           />
         )}
       </main>
@@ -125,6 +133,25 @@ function App() {
             addEdge(pendingEdge.source.id, pendingEdge.target.id, label)
             setPendingEdge(null)
             setMode('navigate')
+          }}
+        />
+      )}
+
+      {editingEdge && (
+        <EdgeEditor
+          sourceLabel={nodes.find((n) => n.id === editingEdge.source)?.label || '?'}
+          targetLabel={nodes.find((n) => n.id === editingEdge.target)?.label || '?'}
+          initialLabel={editingEdge.label}
+          onCancel={() => setEditingEdge(null)}
+          onSubmit={(label) => {
+            updateEdge(editingEdge.id, label)
+            setEditingEdge(null)
+          }}
+          onDelete={() => {
+            if (window.confirm('이 연결선을 삭제할까요?')) {
+              deleteEdge(editingEdge.id)
+            }
+            setEditingEdge(null)
           }}
         />
       )}

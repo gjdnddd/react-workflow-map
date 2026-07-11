@@ -98,5 +98,14 @@ export function useMapData() {
     [nodes, edges, persist],
   )
 
-  return { nodes, edges, status, error, addNode, deleteNode, addEdge, deleteEdge }
+  const updateEdge = useCallback(
+    (edgeId, label) => {
+      const nextEdges = edges.map((e) => (e.id === edgeId ? { ...e, label } : e))
+      setEdges(nextEdges)
+      persist(nodes, nextEdges)
+    },
+    [nodes, edges, persist],
+  )
+
+  return { nodes, edges, status, error, addNode, deleteNode, addEdge, deleteEdge, updateEdge }
 }
