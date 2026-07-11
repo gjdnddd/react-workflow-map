@@ -1,0 +1,175 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #333;
+  background: #1a1a1a;
+}
+
+.app-header button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: inherit;
+  cursor: pointer;
+}
+
+.app-header button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.breadcrumb {
+  margin-left: 8px;
+  font-size: 13px;
+  color: #999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-header button.active {
+  background: #aa3bff;
+  border-color: #aa3bff;
+  color: #fff;
+}
+
+.status {
+  font-size: 12px;
+  color: #999;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.status-error {
+  color: #ff6b6b;
+}
+
+.status-saving {
+  color: #c084fc;
+}
+
+.error-banner {
+  padding: 8px 16px;
+  background: #4a1010;
+  color: #ff8080;
+  font-size: 13px;
+}
+
+.loading-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+}
+
+.editor-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.editor-box {
+  background: #1e1e1e;
+  border: 1px solid #444;
+  border-radius: 10px;
+  padding: 24px;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.editor-box label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+.editor-box input,
+.editor-box textarea {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: inherit;
+  font: inherit;
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.editor-actions button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: inherit;
+  cursor: pointer;
+}
+
+.map-area {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+
+.map-area .react-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.node-center {
+  font-weight: bold;
+}
+
+.node-selected {
+  box-shadow: 0 0 0 3px #aa3bff !important;
+}
+
+.detail-panel {
+  max-width: 480px;
+  margin: 40px auto;
+  padding: 24px;
+}
+
+.back-button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: inherit;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.detail-links {
+  margin-top: 16px;
+}
