@@ -23,5 +23,22 @@ export function useMapNavigation(nodes, rootId = 'hq') {
     setPath([rootId])
   }
 
-  return { path, currentNode, children, goInto, goBack, goToRoot }
+  // 임의의 노드로 바로 이동 — parentId를 따라 루트까지 조상 체인을 만들어 경로로 설정.
+  // 연결 포커스 모드에서 "이 노드의 실제 위치로 이동" 기능에 사용.
+  function goToNode(nodeId) {
+    const byId = Object.fromEntries(nodes.map((n) => [n.id, n]))
+    const chain = []
+    let cur = byId[nodeId]
+    const guard = new Set() // 혹시 모를 순환 방지
+    while (cur && !guard.has(cur.id)) {
+      guard.add(cur.id)
+      chain.unshift(cur.id)
+      cur = cur.parentId ? byId[cur.parentId] : null
+    }
+    if (chain.length === 0) return
+    // 체인이 루트에서 시작하지 않으면(데이터 이상) 루트를 앞에 붙여 최소한 접근 가능하게
+    setPath(chain[0] === rootId ? chain : [rootId, ...chain])
+  }
+
+  return { path, currentNode, children, goInto, goBack, goToRoot, goToNode }
 }

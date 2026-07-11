@@ -14,18 +14,37 @@ function MapNode({ data }) {
     <div className={`n8n-node${data.isCenter ? ' n8n-node-center' : ''}`}>
       <span className="n8n-node-icon">{initial}</span>
       <span className="n8n-node-label">{data.label}</span>
+      {data.connectionCount > 0 && (
+        <button
+          type="button"
+          className="n8n-node-badge"
+          title="연결된 노드 보기"
+          onClick={(e) => {
+            e.stopPropagation()
+            data.onBadgeClick?.(data.id)
+          }}
+        >
+          🔗{data.connectionCount}
+        </button>
+      )}
     </div>
   )
 }
 
 const nodeTypes = { mapNode: MapNode }
 
-function buildRadialLayout(centerNode, children, connectSelection) {
+function buildRadialLayout(centerNode, children, connectSelection, countOf, onBadgeClick) {
   const centerFlowNode = {
     id: centerNode.id,
     type: 'mapNode',
     position: { x: 0, y: 0 },
-    data: { label: centerNode.label, isCenter: true },
+    data: {
+      id: centerNode.id,
+      label: centerNode.label,
+      isCenter: true,
+      connectionCount: countOf(centerNode.id),
+      onBadgeClick,
+    },
     width: NODE_WIDTH,
     height: NODE_HEIGHT,
   }
@@ -37,7 +56,13 @@ function buildRadialLayout(centerNode, children, connectSelection) {
       id: child.id,
       type: 'mapNode',
       position: { x: RADIUS * Math.cos(angle), y: RADIUS * Math.sin(angle) },
-      data: { label: child.label, isCenter: false },
+      data: {
+        id: child.id,
+        label: child.label,
+        isCenter: false,
+        connectionCount: countOf(child.id),
+        onBadgeClick,
+      },
       className: selected ? 'node-selected' : '',
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
@@ -104,7 +129,9 @@ function curvedPath(x1, y1, x2, y2) {
   return { d: `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`, labelX: cx, labelY: cy }
 }
 
-function EdgeOverlay({ nodes, centerId, siblingEdges, viewport, onEdgeAction }) {
+// centerEdgeMap: 포커스 모드에서 { childId: { id, label } } — 중심에서 각 자식으로 그리는
+// 실제 연결선. 값이 있으면 코랄+라벨+클릭(수정) 가능, 없으면 계층용 회색 선.
+function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, onEdgeAction }) {
   const byId = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes])
 
   function centerOf(node) {
@@ -119,13 +146,28 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, viewport, onEdgeAction }) 
     return curvedPath(p1.x, p1.y, p2.x, p2.y)
   }
 
-  const parentLines = nodes
+  // 중심 → 각 노드. 포커스 모드면 연결선(라벨/클릭), 아니면 회색 계층선.
+  const centerLines = nodes
     .filter((n) => n.id !== centerId)
-    .map((n) => ({ id: `parent-${n.id}`, ...trimmedPath(byId[centerId], n) }))
+    .map((n) => {
+      const edge = centerEdgeMap?.[n.id]
+      return {
+        id: `c-${n.id}`,
+        edgeId: edge?.id,
+        label: edge?.label,
+        ...trimmedPath(byId[centerId], n),
+      }
+    })
 
-  const customLines = siblingEdges
+  // 형제↔형제 연결선(일반 모드에서만 채워짐)
+  const siblingLines = siblingEdges
     .filter((e) => byId[e.source] && byId[e.target])
     .map((e) => ({ id: e.id, label: e.label, ...trimmedPath(byId[e.source], byId[e.target]) }))
+
+  const labeledLines = [
+    ...centerLines.filter((l) => l.edgeId),
+    ...siblingLines,
+  ]
 
   return (
     <svg className="edge-overlay" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
@@ -135,10 +177,15 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, viewport, onEdgeAction }) 
         </marker>
       </defs>
       <g transform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}>
-        {parentLines.map((l) => (
-          <path key={l.id} d={l.d} fill="none" stroke="#d7d9e3" strokeWidth={2} />
-        ))}
-        {customLines.map((l) => (
+        {/* 계층용 회색 선 (포커스 모드가 아닌 중심→자식) */}
+        {centerLines
+          .filter((l) => !l.edgeId)
+          .map((l) => (
+            <path key={l.id} d={l.d} fill="none" stroke="#d7d9e3" strokeWidth={2} />
+          ))}
+
+        {/* 라벨 있는 연결선 (코랄, 클릭 시 수정) */}
+        {labeledLines.map((l) => (
           <g key={l.id}>
             {/* 실제 보이는 선보다 넓은 투명 히트 영역 — 클릭하기 쉽게 */}
             <path
@@ -147,13 +194,13 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, viewport, onEdgeAction }) 
               stroke="transparent"
               strokeWidth={16}
               style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
-              onClick={() => onEdgeAction?.(l.id)}
+              onClick={() => onEdgeAction?.(l.edgeId || l.id)}
             />
             <path d={l.d} fill="none" stroke="#ff6d5a" strokeWidth={2} markerEnd="url(#arrow)" />
             {l.label && (
               <g
                 style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-                onClick={() => onEdgeAction?.(l.id)}
+                onClick={() => onEdgeAction?.(l.edgeId || l.id)}
               >
                 <rect
                   x={l.labelX - (l.label.length * 3.6 + 10)}
@@ -184,10 +231,20 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, viewport, onEdgeAction }) 
   )
 }
 
-function MapViewInner({ centerNode, children, siblingEdges, connectSelection, onNodeAction, onEdgeAction }) {
+function MapViewInner({
+  centerNode,
+  children,
+  siblingEdges,
+  connectSelection,
+  connectionCountOf,
+  centerEdgeMap,
+  onNodeAction,
+  onEdgeAction,
+  onBadgeClick,
+}) {
   const nodes = useMemo(
-    () => buildRadialLayout(centerNode, children, connectSelection),
-    [centerNode, children, connectSelection],
+    () => buildRadialLayout(centerNode, children, connectSelection, connectionCountOf, onBadgeClick),
+    [centerNode, children, connectSelection, connectionCountOf, onBadgeClick],
   )
   const { setViewport: setReactFlowViewport } = useReactFlow()
   const wrapperRef = useRef(null)
@@ -235,6 +292,7 @@ function MapViewInner({ centerNode, children, siblingEdges, connectSelection, on
         nodes={nodes}
         centerId={centerNode.id}
         siblingEdges={siblingEdges}
+        centerEdgeMap={centerEdgeMap}
         viewport={viewport}
         onEdgeAction={onEdgeAction}
       />

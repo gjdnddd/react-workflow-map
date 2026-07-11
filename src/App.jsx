@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useMapData } from './store/useMapData'
 import { useMapNavigation } from './store/useMapNavigation'
 import MapView from './components/MapView'
@@ -17,7 +17,7 @@ const STATUS_LABEL = {
 
 function App() {
   const { nodes, edges, status, error, addNode, deleteNode, addEdge, deleteEdge, updateEdge } = useMapData()
-  const { currentNode, children, goInto, goBack, goToRoot, path } = useMapNavigation(nodes, 'hq')
+  const { currentNode, children, goInto, goBack, goToRoot, goToNode, path } = useMapNavigation(nodes, 'hq')
 
   const [mode, setMode] = useState('navigate') // navigate | connect | delete
   const [connectFrom, setConnectFrom] = useState(null)
@@ -25,6 +25,50 @@ function App() {
   const [showTokenModal, setShowTokenModal] = useState(false)
   const [pendingEdge, setPendingEdge] = useState(null) // { source, target }
   const [editingEdge, setEditingEdge] = useState(null) // 기존 연결선(edge 레코드)
+  const [focusNodeId, setFocusNodeId] = useState(null) // 연결 포커스 모드 대상 노드
+
+  // 모든 노드의 연결 개수(브랜치 무관, 전체 edges 기준) — 배지 표시용
+  const connectionCounts = useMemo(() => {
+    const m = {}
+    for (const e of edges) {
+      m[e.source] = (m[e.source] || 0) + 1
+      m[e.target] = (m[e.target] || 0) + 1
+    }
+    return m
+  }, [edges])
+  const connectionCountOf = useCallback((id) => connectionCounts[id] || 0, [connectionCounts])
+
+  // 배지 클릭: 이미 그 노드에 포커스 중이면 해제, 아니면 포커스 진입
+  const onBadgeClick = useCallback((id) => {
+    setMode('navigate')
+    setConnectFrom(null)
+    setFocusNodeId((cur) => (cur === id ? null : id))
+  }, [])
+
+  // 포커스 모드 파생 데이터: 중심 노드 + 연결된 노드들 + 라벨용 엣지 맵
+  const focusNode = focusNodeId ? nodes.find((n) => n.id === focusNodeId) : null
+  const focusData = useMemo(() => {
+    if (!focusNode) return null
+    const related = edges.filter((e) => e.source === focusNode.id || e.target === focusNode.id)
+    const centerEdgeMap = {}
+    const connectedNodes = []
+    const seen = new Set()
+    for (const e of related) {
+      const otherId = e.source === focusNode.id ? e.target : e.source
+      if (otherId === focusNode.id) continue // 자기 자신 연결(루프)은 방사형에서 제외
+      const node = nodes.find((n) => n.id === otherId)
+      if (!node) continue
+      if (!seen.has(otherId)) {
+        seen.add(otherId)
+        connectedNodes.push(node)
+      }
+      // 같은 노드로 엣지가 여러 개면 첫 번째를 라벨/클릭 대표로 사용
+      if (!centerEdgeMap[otherId]) centerEdgeMap[otherId] = { id: e.id, label: e.label }
+    }
+    return { connectedNodes, centerEdgeMap }
+  }, [focusNode, edges, nodes])
+
+  const inFocus = !!focusNode
 
   if (status === 'loading' || !currentNode) {
     return <div className="loading-screen">불러오는 중...</div>
@@ -36,6 +80,11 @@ function App() {
   )
 
   function handleNodeAction(nodeId) {
+    if (inFocus) {
+      // 포커스 모드: 다른 연결 노드를 클릭하면 그 노드 중심으로 포커스 재시작
+      setFocusNodeId(nodeId)
+      return
+    }
     if (mode === 'connect') {
       if (!connectFrom) {
         setConnectFrom(nodeId)
@@ -64,43 +113,74 @@ function App() {
   }
 
   function handleEdgeClick(edgeId) {
-    if (mode !== 'navigate') return // 연결/삭제 모드 중엔 노드 조작에 집중, 엣지 클릭은 평상시에만
+    if (!inFocus && mode !== 'navigate') return // 연결/삭제 모드 중엔 엣지 편집 비활성(포커스 모드는 허용)
     const edge = edges.find((e) => e.id === edgeId)
     if (edge) setEditingEdge(edge)
   }
 
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <button onClick={goToRoot} disabled={path.length === 1}>⌂ HQ</button>
-        <button onClick={goBack} disabled={path.length === 1}>← 뒤로</button>
-        <span className="breadcrumb">{path.join(' / ')}</span>
+      {inFocus ? (
+        <header className="app-header focus-header">
+          <span className="focus-title">🔗 {focusNode.label} 의 연결</span>
+          <div className="header-actions">
+            <button
+              onClick={() => {
+                const id = focusNode.id
+                setFocusNodeId(null)
+                goToNode(id)
+              }}
+            >
+              📍 실제 위치로
+            </button>
+            <button onClick={() => setFocusNodeId(null)}>✕ 닫기</button>
+            <span className={`status status-${status}`}>{STATUS_LABEL[status]}</span>
+          </div>
+        </header>
+      ) : (
+        <header className="app-header">
+          <button onClick={goToRoot} disabled={path.length === 1}>⌂ HQ</button>
+          <button onClick={goBack} disabled={path.length === 1}>← 뒤로</button>
+          <span className="breadcrumb">{path.join(' / ')}</span>
 
-        <div className="header-actions">
-          <button
-            className={mode === 'connect' ? 'active' : ''}
-            onClick={() => toggleMode('connect')}
-            disabled={isLeaf}
-          >
-            {mode === 'connect' ? (connectFrom ? '연결할 대상 클릭' : '연결할 노드 클릭') : '🔗 연결'}
-          </button>
-          <button
-            className={mode === 'delete' ? 'active' : ''}
-            onClick={() => toggleMode('delete')}
-            disabled={isLeaf}
-          >
-            {mode === 'delete' ? '삭제할 노드 클릭' : '🗑 삭제'}
-          </button>
-          <button onClick={() => setShowNodeEditor(true)}>+ 추가</button>
-          <button onClick={() => setShowTokenModal(true)}>🔑 토큰</button>
-          <span className={`status status-${status}`}>{STATUS_LABEL[status]}</span>
-        </div>
-      </header>
+          <div className="header-actions">
+            <button
+              className={mode === 'connect' ? 'active' : ''}
+              onClick={() => toggleMode('connect')}
+              disabled={isLeaf}
+            >
+              {mode === 'connect' ? (connectFrom ? '연결할 대상 클릭' : '연결할 노드 클릭') : '🔗 연결'}
+            </button>
+            <button
+              className={mode === 'delete' ? 'active' : ''}
+              onClick={() => toggleMode('delete')}
+              disabled={isLeaf}
+            >
+              {mode === 'delete' ? '삭제할 노드 클릭' : '🗑 삭제'}
+            </button>
+            <button onClick={() => setShowNodeEditor(true)}>+ 추가</button>
+            <button onClick={() => setShowTokenModal(true)}>🔑 토큰</button>
+            <span className={`status status-${status}`}>{STATUS_LABEL[status]}</span>
+          </div>
+        </header>
+      )}
 
       {error && <div className="error-banner">{error}</div>}
 
       <main className="map-area">
-        {isLeaf ? (
+        {inFocus ? (
+          <MapView
+            centerNode={focusNode}
+            children={focusData.connectedNodes}
+            siblingEdges={[]}
+            connectSelection={[]}
+            connectionCountOf={connectionCountOf}
+            centerEdgeMap={focusData.centerEdgeMap}
+            onNodeAction={handleNodeAction}
+            onEdgeAction={handleEdgeClick}
+            onBadgeClick={onBadgeClick}
+          />
+        ) : isLeaf ? (
           <DetailPanel node={currentNode} onBack={goBack} />
         ) : (
           <MapView
@@ -108,8 +188,10 @@ function App() {
             children={children}
             siblingEdges={siblingEdges}
             connectSelection={connectFrom ? [connectFrom] : []}
+            connectionCountOf={connectionCountOf}
             onNodeAction={handleNodeAction}
             onEdgeAction={handleEdgeClick}
+            onBadgeClick={onBadgeClick}
           />
         )}
       </main>
