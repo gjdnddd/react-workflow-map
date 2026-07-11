@@ -50,59 +50,49 @@ export function useMapData() {
         description: description || '',
         links: links || [],
       }
-      setNodes((prev) => {
-        const next = [...prev, newNode]
-        persist(next, edges)
-        return next
-      })
+      const nextNodes = [...nodes, newNode]
+      setNodes(nextNodes)
+      persist(nextNodes, edges)
     },
-    [edges, persist],
+    [nodes, edges, persist],
   )
 
   const deleteNode = useCallback(
     (nodeId) => {
-      setNodes((prev) => {
-        const idsToRemove = new Set()
-        const collect = (id) => {
-          idsToRemove.add(id)
-          prev.filter((n) => n.parentId === id).forEach((child) => collect(child.id))
-        }
-        collect(nodeId)
-        const next = prev.filter((n) => !idsToRemove.has(n.id))
-        setEdges((prevEdges) => {
-          const nextEdges = prevEdges.filter(
-            (e) => !idsToRemove.has(e.source) && !idsToRemove.has(e.target),
-          )
-          persist(next, nextEdges)
-          return nextEdges
-        })
-        return next
-      })
+      const idsToRemove = new Set()
+      const collect = (id) => {
+        idsToRemove.add(id)
+        nodes.filter((n) => n.parentId === id).forEach((child) => collect(child.id))
+      }
+      collect(nodeId)
+      const nextNodes = nodes.filter((n) => !idsToRemove.has(n.id))
+      const nextEdges = edges.filter(
+        (e) => !idsToRemove.has(e.source) && !idsToRemove.has(e.target),
+      )
+      setNodes(nextNodes)
+      setEdges(nextEdges)
+      persist(nextNodes, nextEdges)
     },
-    [persist],
+    [nodes, edges, persist],
   )
 
   const addEdge = useCallback(
     (source, target, label) => {
       const newEdge = { id: makeId('edge'), source, target, label: label || '' }
-      setEdges((prev) => {
-        const next = [...prev, newEdge]
-        persist(nodes, next)
-        return next
-      })
+      const nextEdges = [...edges, newEdge]
+      setEdges(nextEdges)
+      persist(nodes, nextEdges)
     },
-    [nodes, persist],
+    [nodes, edges, persist],
   )
 
   const deleteEdge = useCallback(
     (edgeId) => {
-      setEdges((prev) => {
-        const next = prev.filter((e) => e.id !== edgeId)
-        persist(nodes, next)
-        return next
-      })
+      const nextEdges = edges.filter((e) => e.id !== edgeId)
+      setEdges(nextEdges)
+      persist(nodes, nextEdges)
     },
-    [nodes, persist],
+    [nodes, edges, persist],
   )
 
   return { nodes, edges, status, error, addNode, deleteNode, addEdge, deleteEdge }
