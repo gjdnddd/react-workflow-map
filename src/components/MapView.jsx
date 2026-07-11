@@ -3,17 +3,29 @@ import { ReactFlow, ReactFlowProvider, Background, Controls, useReactFlow } from
 import '@xyflow/react/dist/style.css'
 import MapErrorBoundary from './MapErrorBoundary'
 
-const RADIUS = 220
-const NODE_WIDTH = 150
-const NODE_HEIGHT = 48
+const RADIUS = 240
+const NODE_WIDTH = 170
+const NODE_HEIGHT = 56
 const PADDING = 80
+
+function MapNode({ data }) {
+  const initial = data.label?.trim()?.[0] || '?'
+  return (
+    <div className={`n8n-node${data.isCenter ? ' n8n-node-center' : ''}`}>
+      <span className="n8n-node-icon">{initial}</span>
+      <span className="n8n-node-label">{data.label}</span>
+    </div>
+  )
+}
+
+const nodeTypes = { mapNode: MapNode }
 
 function buildRadialLayout(centerNode, children, connectSelection) {
   const centerFlowNode = {
     id: centerNode.id,
+    type: 'mapNode',
     position: { x: 0, y: 0 },
-    data: { label: centerNode.label },
-    className: 'node-center',
+    data: { label: centerNode.label, isCenter: true },
     width: NODE_WIDTH,
     height: NODE_HEIGHT,
   }
@@ -23,9 +35,10 @@ function buildRadialLayout(centerNode, children, connectSelection) {
     const selected = connectSelection?.includes(child.id)
     return {
       id: child.id,
+      type: 'mapNode',
       position: { x: RADIUS * Math.cos(angle), y: RADIUS * Math.sin(angle) },
-      data: { label: child.label },
-      className: selected ? 'node-child node-selected' : 'node-child',
+      data: { label: child.label, isCenter: false },
+      className: selected ? 'node-selected' : '',
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
     }
@@ -62,6 +75,22 @@ function computeCenteredViewport(nodes, containerWidth, containerHeight) {
 // React Flow의 내장 엣지 렌더링은 ResizeObserver 기반 노드 측정에 의존하는데,
 // 일부 임베드/자동화 환경에서 측정이 발화하지 않아 엣지가 그려지지 않는 경우가 있다.
 // 노드 위치를 이미 직접 계산해 알고 있으므로, 연결선은 별도 SVG 오버레이로 직접 그린다.
+function curvedPath(x1, y1, x2, y2) {
+  // 두 점을 잇는 완만한 곡선(2차 베지어). 수직 방향으로 살짝 휘어지게 해 n8n 특유의
+  // 부드러운 커넥션 라인 느낌을 낸다.
+  const mx = (x1 + x2) / 2
+  const my = (y1 + y2) / 2
+  const dx = x2 - x1
+  const dy = y2 - y1
+  const len = Math.hypot(dx, dy) || 1
+  const curveAmount = Math.min(len * 0.18, 40)
+  const nx = (-dy / len) * curveAmount
+  const ny = (dx / len) * curveAmount
+  const cx = mx + nx
+  const cy = my + ny
+  return { d: `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`, labelX: cx, labelY: cy }
+}
+
 function EdgeOverlay({ nodes, centerId, siblingEdges, viewport }) {
   const byId = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes])
 
@@ -74,7 +103,7 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, viewport }) {
     .map((n) => {
       const c = centerOf(byId[centerId])
       const t = centerOf(n)
-      return { id: `parent-${n.id}`, x1: c.x, y1: c.y, x2: t.x, y2: t.y, label: null, custom: false }
+      return { id: `parent-${n.id}`, ...curvedPath(c.x, c.y, t.x, t.y) }
     })
 
   const customLines = siblingEdges
@@ -82,34 +111,46 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, viewport }) {
     .map((e) => {
       const s = centerOf(byId[e.source])
       const t = centerOf(byId[e.target])
-      return { id: e.id, x1: s.x, y1: s.y, x2: t.x, y2: t.y, label: e.label, custom: true }
+      return { id: e.id, label: e.label, ...curvedPath(s.x, s.y, t.x, t.y) }
     })
 
   return (
     <svg className="edge-overlay" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
       <defs>
         <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-          <path d="M0,0 L0,6 L8,3 z" fill="#c084fc" />
+          <path d="M0,0 L0,6 L8,3 z" fill="#ff6d5a" />
         </marker>
       </defs>
       <g transform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}>
         {parentLines.map((l) => (
-          <line key={l.id} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#555" strokeWidth={2} />
+          <path key={l.id} d={l.d} fill="none" stroke="#d7d9e3" strokeWidth={2} />
         ))}
         {customLines.map((l) => (
           <g key={l.id}>
-            <line x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#c084fc" strokeWidth={2} markerEnd="url(#arrow)" />
+            <path d={l.d} fill="none" stroke="#ff6d5a" strokeWidth={2} markerEnd="url(#arrow)" />
             {l.label && (
-              <text
-                x={(l.x1 + l.x2) / 2}
-                y={(l.y1 + l.y2) / 2 - 6}
-                fill="#c084fc"
-                fontSize={13}
-                fontWeight={600}
-                textAnchor="middle"
-              >
-                {l.label}
-              </text>
+              <g>
+                <rect
+                  x={l.labelX - (l.label.length * 3.6 + 10)}
+                  y={l.labelY - 11}
+                  width={l.label.length * 7.2 + 20}
+                  height={22}
+                  rx={11}
+                  fill="#ffe6e0"
+                  stroke="#ff6d5a"
+                  strokeWidth={1}
+                />
+                <text
+                  x={l.labelX}
+                  y={l.labelY + 4}
+                  fill="#c9432f"
+                  fontSize={12}
+                  fontWeight={600}
+                  textAnchor="middle"
+                >
+                  {l.label}
+                </text>
+              </g>
             )}
           </g>
         ))}
@@ -153,6 +194,7 @@ function MapViewInner({ centerNode, children, siblingEdges, connectSelection, on
       <ReactFlow
         nodes={nodes}
         edges={[]}
+        nodeTypes={nodeTypes}
         onNodeClick={(_, node) => {
           if (node.id !== centerNode.id) onNodeAction(node.id)
         }}
@@ -161,7 +203,7 @@ function MapViewInner({ centerNode, children, siblingEdges, connectSelection, on
         nodesConnectable={false}
         proOptions={{ hideAttribution: true }}
       >
-        <Background />
+        <Background variant="dots" gap={20} size={1.5} color="#d7d9e3" bgColor="#f6f6f9" />
         <Controls showInteractive={false} />
       </ReactFlow>
       <EdgeOverlay nodes={nodes} centerId={centerNode.id} siblingEdges={siblingEdges} viewport={viewport} />

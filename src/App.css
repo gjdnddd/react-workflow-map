@@ -1,3 +1,24 @@
+:root {
+  --canvas-bg: #f6f6f9;
+  --dot-color: #d7d9e3;
+  --surface: #ffffff;
+  --border: #e1e4ea;
+  --text: #1f2937;
+  --text-soft: #6b7280;
+  --accent: #ff6d5a;
+  --accent-soft: #ffe6e0;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 2px 8px rgba(16, 24, 40, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  color: var(--text);
+}
+
 .app-shell {
   display: flex;
   flex-direction: column;
@@ -5,6 +26,7 @@
   height: 100dvh; /* 모바일 브라우저 주소창 영역 대응 */
   width: 100vw;
   overflow: hidden;
+  background: var(--canvas-bg);
 }
 
 .app-header {
@@ -12,18 +34,25 @@
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  border-bottom: 1px solid #333;
-  background: #1a1a1a;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
   flex-wrap: wrap; /* 좁은 화면에서 버튼이 줄바꿈되도록 */
 }
 
 .app-header button {
   padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid #444;
-  background: #2a2a2a;
-  color: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 500;
   cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.app-header button:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #c7cbd4;
 }
 
 .app-header button:disabled {
@@ -34,7 +63,7 @@
 .breadcrumb {
   margin-left: 8px;
   font-size: 13px;
-  color: #999;
+  color: var(--text-soft);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -48,30 +77,31 @@
 }
 
 .app-header button.active {
-  background: #aa3bff;
-  border-color: #aa3bff;
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
 .status {
   font-size: 12px;
-  color: #999;
+  color: var(--text-soft);
   padding: 0 8px;
   white-space: nowrap;
 }
 
 .status-error {
-  color: #ff6b6b;
+  color: #d92d20;
 }
 
 .status-saving {
-  color: #c084fc;
+  color: var(--accent);
 }
 
 .error-banner {
   padding: 8px 16px;
-  background: #4a1010;
-  color: #ff8080;
+  background: #fef1ef;
+  color: #b8291f;
+  border-bottom: 1px solid #f8d3cd;
   font-size: 13px;
 }
 
@@ -82,12 +112,14 @@
   height: 100vh;
   height: 100dvh;
   width: 100vw;
+  background: var(--canvas-bg);
+  color: var(--text-soft);
 }
 
 .editor-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(31, 41, 55, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -96,9 +128,10 @@
 
 .editor-box {
   box-sizing: border-box; /* padding 포함해 width 계산 → 모바일에서 좌우 여백 확보 */
-  background: #1e1e1e;
-  border: 1px solid #444;
-  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
   padding: 24px;
   width: min(340px, 90vw);
   max-height: 88dvh;
@@ -108,22 +141,39 @@
   gap: 12px;
 }
 
+.editor-box h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.editor-box p {
+  color: var(--text-soft);
+  margin: 0;
+}
+
 .editor-box label {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
-  color: #ccc;
+  color: var(--text-soft);
 }
 
 .editor-box input,
 .editor-box textarea {
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid #444;
-  background: #2a2a2a;
-  color: inherit;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #f9fafb;
+  color: var(--text);
   font: inherit;
+}
+
+.editor-box input:focus,
+.editor-box textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: #fff;
 }
 
 .editor-actions {
@@ -135,17 +185,25 @@
 
 .editor-actions button {
   padding: 6px 14px;
-  border-radius: 6px;
-  border: 1px solid #444;
-  background: #2a2a2a;
-  color: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
+}
+
+.editor-actions button[type='submit'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
 }
 
 .map-area {
   flex: 1;
   position: relative;
   min-height: 0;
+  background: var(--canvas-bg);
 }
 
 .map-area .react-flow {
@@ -153,28 +211,105 @@
   height: 100%;
 }
 
-.node-center {
-  font-weight: bold;
-}
-
-.node-selected {
-  box-shadow: 0 0 0 3px #aa3bff !important;
-}
-
 .detail-panel {
   max-width: 480px;
   margin: 40px auto;
   padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+}
+
+.detail-panel h2 {
+  color: var(--text);
+}
+
+.detail-panel p {
+  color: var(--text-soft);
+  line-height: 1.6;
 }
 
 .back-button {
   padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid #444;
-  background: #2a2a2a;
-  color: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
   margin-bottom: 16px;
+}
+
+.detail-links a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.detail-links a:hover {
+  text-decoration: underline;
+}
+
+/* ===== n8n 스타일 노드 카드 ===== */
+.n8n-node {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.n8n-node:hover {
+  box-shadow: var(--shadow-md);
+  border-color: #c7cbd4;
+}
+
+.n8n-node-icon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.n8n-node-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.n8n-node-center {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.n8n-node-center .n8n-node-icon {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.n8n-node-center .n8n-node-label {
+  color: #fff;
+}
+
+.node-selected .n8n-node {
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md);
+  border-color: var(--accent);
 }
 
 .detail-links {
