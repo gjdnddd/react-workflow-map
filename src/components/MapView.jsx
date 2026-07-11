@@ -127,13 +127,24 @@ function MapViewInner({ centerNode, children, siblingEdges, connectSelection, on
   const wrapperRef = useRef(null)
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 })
 
+  // 노드가 바뀌거나 컨테이너 크기가 변할 때(모바일 회전/주소창 변화 등) 중앙 정렬 재계산
   useEffect(() => {
-    if (!wrapperRef.current) return
-    const rect = wrapperRef.current.getBoundingClientRect()
-    if (rect.width === 0 || rect.height === 0) return
-    const nextViewport = computeCenteredViewport(nodes, rect.width, rect.height)
-    setReactFlowViewport(nextViewport, { duration: 0 })
-    setViewport(nextViewport)
+    const el = wrapperRef.current
+    if (!el) return
+
+    const recenter = () => {
+      const rect = el.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) return
+      const nextViewport = computeCenteredViewport(nodes, rect.width, rect.height)
+      setReactFlowViewport(nextViewport, { duration: 0 })
+      setViewport(nextViewport)
+    }
+
+    recenter()
+
+    const observer = new ResizeObserver(recenter)
+    observer.observe(el)
+    return () => observer.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [centerNode.id, children.length, setReactFlowViewport])
 

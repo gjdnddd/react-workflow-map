@@ -2,7 +2,9 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh; /* 모바일 브라우저 주소창 영역 대응 */
   width: 100vw;
+  overflow: hidden;
 }
 
 .app-header {
@@ -12,6 +14,7 @@
   padding: 10px 16px;
   border-bottom: 1px solid #333;
   background: #1a1a1a;
+  flex-wrap: wrap; /* 좁은 화면에서 버튼이 줄바꿈되도록 */
 }
 
 .app-header button {
@@ -77,6 +80,7 @@
   align-items: center;
   justify-content: center;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
 }
 
@@ -91,11 +95,14 @@
 }
 
 .editor-box {
+  box-sizing: border-box; /* padding 포함해 width 계산 → 모바일에서 좌우 여백 확보 */
   background: #1e1e1e;
   border: 1px solid #444;
   border-radius: 10px;
   padding: 24px;
-  width: 340px;
+  width: min(340px, 90vw);
+  max-height: 88dvh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -172,4 +179,38 @@
 
 .detail-links {
   margin-top: 16px;
+}
+
+/* ===== 모바일(좁은 화면) 대응 ===== */
+@media (max-width: 640px) {
+  .app-header {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .app-header button {
+    padding: 9px 11px; /* 터치 타깃 확보 (약 40px 높이) */
+    font-size: 13px;
+  }
+
+  .header-actions {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  /* breadcrumb는 버튼들 아래 한 줄 전체로 내림 */
+  .breadcrumb {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .status {
+    padding: 0 4px;
+  }
+
+  .detail-panel {
+    margin: 20px 16px;
+    padding: 16px;
+  }
 }

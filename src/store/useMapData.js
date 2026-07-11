@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchMapData, saveMapData } from '../data/gistSync'
-import { mockNodes, mockEdges } from '../data/mockData'
+
+// Gist가 비었거나 읽기 실패 시 보여줄 초기 상태: HQ 노드 하나만.
+// (루트 id는 반드시 'hq' — useMapNavigation/App이 이 id를 루트로 사용)
+const SEED_NODES = [
+  { id: 'hq', label: 'HQ', parentId: null, description: '', links: [] },
+]
 
 let idCounter = 0
 function makeId(prefix) {
@@ -17,16 +22,14 @@ export function useMapData() {
   useEffect(() => {
     fetchMapData()
       .then((data) => {
-        const loadedNodes = data.nodes?.length ? data.nodes : mockNodes
-        const loadedEdges = data.edges?.length ? data.edges : (data.nodes?.length ? [] : mockEdges)
-        setNodes(loadedNodes)
-        setEdges(loadedEdges)
+        setNodes(data.nodes?.length ? data.nodes : SEED_NODES)
+        setEdges(data.edges?.length ? data.edges : [])
         setStatus('ready')
       })
       .catch((e) => {
         setError(e.message)
-        setNodes(mockNodes)
-        setEdges(mockEdges)
+        setNodes(SEED_NODES)
+        setEdges([])
         setStatus('error')
       })
   }, [])
