@@ -16,7 +16,7 @@ const STATUS_LABEL = {
 }
 
 function App() {
-  const { nodes, edges, status, error, addNode, deleteNode, updateNode, addEdge, deleteEdge, updateEdge } = useMapData()
+  const { nodes, edges, status, error, addNode, deleteNode, updateNode, moveNode, addEdge, deleteEdge, updateEdge } = useMapData()
   const { currentNode, children, goInto, goBack, goToRoot, goToNode, path } = useMapNavigation(nodes, 'hq')
 
   const [mode, setMode] = useState('navigate') // navigate | connect | delete | edit
@@ -125,6 +125,30 @@ function App() {
     if (edge) setEditingEdge(edge)
   }
 
+  // 드래그로 형제 노드 위에 놓았을 때 재부모화. 대상이 자기 자신의 하위(또는 자기 자신)면
+  // 순환 구조가 되므로 막는다.
+  function isNodeOrDescendant(candidateId, targetId) {
+    let cur = nodes.find((n) => n.id === targetId)
+    while (cur) {
+      if (cur.id === candidateId) return true
+      cur = cur.parentId ? nodes.find((n) => n.id === cur.parentId) : null
+    }
+    return false
+  }
+
+  function handleNodeReparent(nodeId, newParentId) {
+    if (nodeId === newParentId) return
+    if (isNodeOrDescendant(nodeId, newParentId)) {
+      window.alert('자기 자신의 하위로는 이동할 수 없습니다.')
+      return
+    }
+    const dragged = nodes.find((n) => n.id === nodeId)
+    const target = nodes.find((n) => n.id === newParentId)
+    if (window.confirm(`"${dragged.label}"을(를) "${target.label}" 아래로 이동할까요?`)) {
+      moveNode(nodeId, newParentId)
+    }
+  }
+
   return (
     <div className="app-shell">
       {inFocus ? (
@@ -203,9 +227,11 @@ function App() {
             siblingEdges={siblingEdges}
             connectSelection={connectFrom ? [connectFrom] : []}
             connectionCountOf={connectionCountOf}
+            dragEnabled={mode === 'navigate'}
             onNodeAction={handleNodeAction}
             onEdgeAction={handleEdgeClick}
             onBadgeClick={onBadgeClick}
+            onNodeReparent={handleNodeReparent}
           />
         )}
       </main>

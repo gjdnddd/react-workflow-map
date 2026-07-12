@@ -33,7 +33,7 @@ function MapNode({ data }) {
 
 const nodeTypes = { mapNode: MapNode }
 
-function buildRadialLayout(centerNode, children, connectSelection, countOf, onBadgeClick) {
+function buildRadialLayout(centerNode, children, connectSelection, countOf, onBadgeClick, dragEnabled, dropTargetId) {
   const centerFlowNode = {
     id: centerNode.id,
     type: 'mapNode',
@@ -45,6 +45,7 @@ function buildRadialLayout(centerNode, children, connectSelection, countOf, onBa
       connectionCount: countOf(centerNode.id),
       onBadgeClick,
     },
+    draggable: false,
     width: NODE_WIDTH,
     height: NODE_HEIGHT,
   }
@@ -52,6 +53,10 @@ function buildRadialLayout(centerNode, children, connectSelection, countOf, onBa
   const childFlowNodes = children.map((child, i) => {
     const angle = (2 * Math.PI * i) / children.length - Math.PI / 2
     const selected = connectSelection?.includes(child.id)
+    const classNames = [
+      selected ? 'node-selected' : '',
+      child.id === dropTargetId ? 'node-drop-target' : '',
+    ].filter(Boolean).join(' ')
     return {
       id: child.id,
       type: 'mapNode',
@@ -63,13 +68,25 @@ function buildRadialLayout(centerNode, children, connectSelection, countOf, onBa
         connectionCount: countOf(child.id),
         onBadgeClick,
       },
-      className: selected ? 'node-selected' : '',
+      className: classNames,
+      draggable: dragEnabled,
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
     }
   })
 
   return [centerFlowNode, ...childFlowNodes]
+}
+
+// 드래그 중인 노드와 다른 형제 노드가 겹치는지 확인 (드롭 대상 판정용)
+function findOverlapTarget(draggedId, draggedPos, siblings) {
+  for (const n of siblings) {
+    if (n.id === draggedId) continue
+    const dx = Math.abs(n.position.x - draggedPos.x)
+    const dy = Math.abs(n.position.y - draggedPos.y)
+    if (dx < NODE_WIDTH * 0.6 && dy < NODE_HEIGHT * 0.6) return n.id
+  }
+  return null
 }
 
 function computeCenteredViewport(nodes, containerWidth, containerHeight) {
@@ -238,13 +255,16 @@ function MapViewInner({
   connectSelection,
   connectionCountOf,
   centerEdgeMap,
+  dragEnabled,
   onNodeAction,
   onEdgeAction,
   onBadgeClick,
+  onNodeReparent,
 }) {
+  const [dropTargetId, setDropTargetId] = useState(null)
   const nodes = useMemo(
-    () => buildRadialLayout(centerNode, children, connectSelection, connectionCountOf, onBadgeClick),
-    [centerNode, children, connectSelection, connectionCountOf, onBadgeClick],
+    () => buildRadialLayout(centerNode, children, connectSelection, connectionCountOf, onBadgeClick, dragEnabled, dropTargetId),
+    [centerNode, children, connectSelection, connectionCountOf, onBadgeClick, dragEnabled, dropTargetId],
   )
   const { setViewport: setReactFlowViewport } = useReactFlow()
   const wrapperRef = useRef(null)
@@ -280,8 +300,17 @@ function MapViewInner({
         onNodeClick={(_, node) => {
           if (node.id !== centerNode.id) onNodeAction(node.id)
         }}
+        onNodeDrag={(_, node) => {
+          const target = findOverlapTarget(node.id, node.position, nodes.filter((n) => n.id !== centerNode.id))
+          setDropTargetId(target)
+        }}
+        onNodeDragStop={(_, node) => {
+          if (dropTargetId) {
+            onNodeReparent?.(node.id, dropTargetId)
+          }
+          setDropTargetId(null)
+        }}
         onMove={(_, vp) => setViewport(vp)}
-        nodesDraggable={false}
         nodesConnectable={false}
         proOptions={{ hideAttribution: true }}
       >

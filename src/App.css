@@ -371,6 +371,12 @@ body {
   border-color: var(--accent);
 }
 
+.node-drop-target .n8n-node {
+  border: 2px dashed var(--accent);
+  background: var(--accent-soft);
+  transform: scale(1.05);
+}
+
 .detail-links {
   margin-top: 16px;
 }

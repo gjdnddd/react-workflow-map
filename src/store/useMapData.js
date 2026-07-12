@@ -100,6 +100,17 @@ export function useMapData() {
     [nodes, edges, persist],
   )
 
+  // 드래그로 다른 부모 밑으로 재배치. 연결선(edges)은 노드 id 기준이라 그대로 유지되고,
+  // 하위 노드들도 parentId가 이 노드를 가리키므로 통째로 함께 이동한다.
+  const moveNode = useCallback(
+    (nodeId, newParentId) => {
+      const nextNodes = nodes.map((n) => (n.id === nodeId ? { ...n, parentId: newParentId } : n))
+      setNodes(nextNodes)
+      persist(nextNodes, edges)
+    },
+    [nodes, edges, persist],
+  )
+
   const deleteEdge = useCallback(
     (edgeId) => {
       const nextEdges = edges.filter((e) => e.id !== edgeId)
@@ -118,5 +129,5 @@ export function useMapData() {
     [nodes, edges, persist],
   )
 
-  return { nodes, edges, status, error, addNode, deleteNode, updateNode, addEdge, deleteEdge, updateEdge }
+  return { nodes, edges, status, error, addNode, deleteNode, updateNode, moveNode, addEdge, deleteEdge, updateEdge }
 }
