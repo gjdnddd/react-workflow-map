@@ -16,15 +16,16 @@ const STATUS_LABEL = {
 }
 
 function App() {
-  const { nodes, edges, status, error, addNode, deleteNode, addEdge, deleteEdge, updateEdge } = useMapData()
+  const { nodes, edges, status, error, addNode, deleteNode, updateNode, addEdge, deleteEdge, updateEdge } = useMapData()
   const { currentNode, children, goInto, goBack, goToRoot, goToNode, path } = useMapNavigation(nodes, 'hq')
 
-  const [mode, setMode] = useState('navigate') // navigate | connect | delete
+  const [mode, setMode] = useState('navigate') // navigate | connect | delete | edit
   const [connectFrom, setConnectFrom] = useState(null)
   const [showNodeEditor, setShowNodeEditor] = useState(false)
   const [showTokenModal, setShowTokenModal] = useState(false)
   const [pendingEdge, setPendingEdge] = useState(null) // { source, target }
   const [editingEdge, setEditingEdge] = useState(null) // 기존 연결선(edge 레코드)
+  const [editingNode, setEditingNode] = useState(null) // 기존 노드(node 레코드) - 이름/설명 수정
   const [focusNodeId, setFocusNodeId] = useState(null) // 연결 포커스 모드 대상 노드
 
   // 모든 노드의 연결 개수(브랜치 무관, 전체 edges 기준) — 배지 표시용
@@ -104,6 +105,12 @@ function App() {
       setMode('navigate')
       return
     }
+    if (mode === 'edit') {
+      const target = nodes.find((n) => n.id === nodeId)
+      if (target) setEditingNode(target)
+      setMode('navigate')
+      return
+    }
     goInto(nodeId)
   }
 
@@ -158,6 +165,13 @@ function App() {
             >
               {mode === 'delete' ? '삭제할 노드 클릭' : '🗑 삭제'}
             </button>
+            <button
+              className={mode === 'edit' ? 'active' : ''}
+              onClick={() => toggleMode('edit')}
+              disabled={isLeaf}
+            >
+              {mode === 'edit' ? '수정할 노드 클릭' : '✏️ 수정'}
+            </button>
             <button onClick={() => setShowNodeEditor(true)}>+ 추가</button>
             <button onClick={() => setShowTokenModal(true)}>🔑 토큰</button>
             <span className={`status status-${status}`}>{STATUS_LABEL[status]}</span>
@@ -202,6 +216,23 @@ function App() {
           onSubmit={(values) => {
             addNode(currentNode.id, values)
             setShowNodeEditor(false)
+          }}
+        />
+      )}
+
+      {editingNode && (
+        <NodeEditor
+          initialValues={editingNode}
+          onCancel={() => setEditingNode(null)}
+          onSubmit={(values) => {
+            updateNode(editingNode.id, values)
+            setEditingNode(null)
+          }}
+          onDelete={() => {
+            if (window.confirm(`"${editingNode.label}" 및 하위 유닛을 모두 삭제할까요?`)) {
+              deleteNode(editingNode.id)
+            }
+            setEditingNode(null)
           }}
         />
       )}

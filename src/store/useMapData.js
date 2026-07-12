@@ -89,6 +89,17 @@ export function useMapData() {
     [nodes, edges, persist],
   )
 
+  const updateNode = useCallback(
+    (nodeId, { label, description, links }) => {
+      const nextNodes = nodes.map((n) =>
+        n.id === nodeId ? { ...n, label, description: description || '', links: links || [] } : n,
+      )
+      setNodes(nextNodes)
+      persist(nextNodes, edges)
+    },
+    [nodes, edges, persist],
+  )
+
   const deleteEdge = useCallback(
     (edgeId) => {
       const nextEdges = edges.filter((e) => e.id !== edgeId)
@@ -107,5 +118,5 @@ export function useMapData() {
     [nodes, edges, persist],
   )
 
-  return { nodes, edges, status, error, addNode, deleteNode, addEdge, deleteEdge, updateEdge }
+  return { nodes, edges, status, error, addNode, deleteNode, updateNode, addEdge, deleteEdge, updateEdge }
 }
