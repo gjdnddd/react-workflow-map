@@ -105,6 +105,40 @@ body {
   font-size: 13px;
 }
 
+.move-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--accent-soft);
+  color: #c9432f;
+  border-bottom: 1px solid #f6c9c1;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.move-banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.move-banner-actions button {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: #fff;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.move-banner-actions button:first-child {
+  background: var(--accent);
+  color: #fff;
+}
+
 .loading-screen {
   display: flex;
   align-items: center;

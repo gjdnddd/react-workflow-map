@@ -27,6 +27,7 @@ function App() {
   const [editingEdge, setEditingEdge] = useState(null) // 기존 연결선(edge 레코드)
   const [editingNode, setEditingNode] = useState(null) // 기존 노드(node 레코드) - 이름/설명 수정
   const [focusNodeId, setFocusNodeId] = useState(null) // 연결 포커스 모드 대상 노드
+  const [movingNodeId, setMovingNodeId] = useState(null) // "잘라내기"로 들고 있는 노드 — 멀리 떨어진 곳으로 이동
 
   // 모든 노드의 연결 개수(브랜치 무관, 전체 edges 기준) — 배지 표시용
   const connectionCounts = useMemo(() => {
@@ -113,6 +114,11 @@ function App() {
       setMode('navigate')
       return
     }
+    if (mode === 'move') {
+      setMovingNodeId(nodeId)
+      setMode('navigate')
+      return
+    }
     goInto(nodeId)
   }
 
@@ -159,6 +165,26 @@ function App() {
   // 연결선 라벨을 드래그해서 옮겼을 때 저장
   function handleEdgeLabelMove(edgeId, labelOffset) {
     updateEdge(edgeId, { labelOffset })
+  }
+
+  // "잘라내기"로 들고 있는 노드를, 지금 보고 있는(드릴다운/포커스로 도착한) 노드 밑으로 이동.
+  // 화면에 동시에 안 보이는 먼 곳으로도 옮길 수 있음(형제 드래그의 한계를 보완).
+  const movingNode = movingNodeId ? nodes.find((n) => n.id === movingNodeId) : null
+  function handleMoveHere() {
+    const targetId = inFocus ? focusNode.id : currentNode.id
+    if (movingNodeId === targetId) {
+      window.alert('같은 위치입니다.')
+      return
+    }
+    if (isNodeOrDescendant(movingNodeId, targetId)) {
+      window.alert('자기 자신의 하위로는 이동할 수 없습니다.')
+      return
+    }
+    const target = nodes.find((n) => n.id === targetId)
+    if (window.confirm(`"${movingNode.label}"을(를) "${target.label}" 아래로 이동할까요?`)) {
+      moveNode(movingNodeId, targetId)
+      setMovingNodeId(null)
+    }
   }
 
   return (
@@ -208,6 +234,13 @@ function App() {
             >
               {mode === 'edit' ? '수정할 노드 클릭' : '✏️ 수정'}
             </button>
+            <button
+              className={mode === 'move' ? 'active' : ''}
+              onClick={() => toggleMode('move')}
+              disabled={isLeaf || !!movingNodeId}
+            >
+              {mode === 'move' ? '이동할 노드 클릭' : '✂️ 이동'}
+            </button>
             <button onClick={() => setShowNodeEditor(true)}>+ 추가</button>
             <button onClick={() => setShowTokenModal(true)}>🔑 토큰</button>
             <span className={`status status-${status}`}>{STATUS_LABEL[status]}</span>
@@ -216,6 +249,16 @@ function App() {
       )}
 
       {error && <div className="error-banner">{error}</div>}
+
+      {movingNode && (
+        <div className="move-banner">
+          <span>✂️ <strong>{movingNode.label}</strong> 이동 중 — 원하는 위치로 이동한 뒤 아래 버튼을 눌러주세요</span>
+          <div className="move-banner-actions">
+            <button onClick={handleMoveHere}>📌 여기로 이동</button>
+            <button onClick={() => setMovingNodeId(null)}>취소</button>
+          </div>
+        </div>
+      )}
 
       <main className="map-area">
         {inFocus ? (
