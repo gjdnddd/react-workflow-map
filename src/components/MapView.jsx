@@ -3,15 +3,16 @@ import { ReactFlow, ReactFlowProvider, Background, Controls, useReactFlow } from
 import '@xyflow/react/dist/style.css'
 import MapErrorBoundary from './MapErrorBoundary'
 
-const RADIUS = 240
+const BASE_RADIUS = 240
 const NODE_WIDTH = 170
 const NODE_HEIGHT = 56
+const NODE_GAP = 30
 const PADDING = 80
 
 function MapNode({ data }) {
   const initial = data.label?.trim()?.[0] || '?'
   return (
-    <div className={`n8n-node${data.isCenter ? ' n8n-node-center' : ''}`}>
+    <div className={`n8n-node${data.isCenter ? ' n8n-node-center' : ''}${data.isDragging ? ' n8n-node-dragging' : ''}`}>
       <span className="n8n-node-icon">{initial}</span>
       <span className="n8n-node-label">{data.label}</span>
       {data.connectionCount > 0 && (
@@ -33,7 +34,15 @@ function MapNode({ data }) {
 
 const nodeTypes = { mapNode: MapNode }
 
-function buildRadialLayout(centerNode, children, connectSelection, countOf, onBadgeClick, dragEnabled, dropTargetId) {
+// 자식 노드가 많으면 원의 둘레가 부족해 카드끼리 겹친다. 자식 수에 맞춰
+// 반지름을 늘려서(둘레 ≈ 카드 폭 합) 기본 배치에서부터 안 겹치게 한다.
+function radiusFor(count) {
+  if (count <= 1) return BASE_RADIUS
+  const circumference = count * (NODE_WIDTH + NODE_GAP)
+  return Math.max(BASE_RADIUS, circumference / (2 * Math.PI))
+}
+
+function buildRadialLayout(centerNode, children, connectSelection, countOf, onBadgeClick, dragEnabled, dropTargetId, draggingId) {
   const centerFlowNode = {
     id: centerNode.id,
     type: 'mapNode',
@@ -50,8 +59,12 @@ function buildRadialLayout(centerNode, children, connectSelection, countOf, onBa
     height: NODE_HEIGHT,
   }
 
+  const radius = radiusFor(children.length)
+
   const childFlowNodes = children.map((child, i) => {
     const angle = (2 * Math.PI * i) / children.length - Math.PI / 2
+    const defaultPos = { x: radius * Math.cos(angle), y: radius * Math.sin(angle) }
+    const position = child.layout ? { x: child.layout.x, y: child.layout.y } : defaultPos
     const selected = connectSelection?.includes(child.id)
     const classNames = [
       selected ? 'node-selected' : '',
@@ -60,11 +73,12 @@ function buildRadialLayout(centerNode, children, connectSelection, countOf, onBa
     return {
       id: child.id,
       type: 'mapNode',
-      position: { x: RADIUS * Math.cos(angle), y: RADIUS * Math.sin(angle) },
+      position,
       data: {
         id: child.id,
         label: child.label,
         isCenter: false,
+        isDragging: child.id === draggingId,
         connectionCount: countOf(child.id),
         onBadgeClick,
       },
@@ -143,16 +157,50 @@ function curvedPath(x1, y1, x2, y2) {
   const ny = (dx / len) * curveAmount
   const cx = mx + nx
   const cy = my + ny
-  return { d: `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`, labelX: cx, labelY: cy }
+  return { d: `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`, midX: cx, midY: cy }
 }
 
-// centerEdgeMap: 포커스 모드에서 { childId: { id, label } } — 중심에서 각 자식으로 그리는
-// 실제 연결선. 값이 있으면 코랄+라벨+클릭(수정) 가능, 없으면 계층용 회색 선.
-function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, onEdgeAction }) {
+const DEFAULT_EDGE_COLOR = '#ff6d5a'
+
+// centerEdgeMap: 포커스 모드에서 { childId: { id, label, color, labelOffset } } — 중심에서
+// 각 자식으로 그리는 실제 연결선. 값이 있으면 컬러+라벨+클릭(수정) 가능, 없으면 계층용 회색 선.
+function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, dragOverridePos, onEdgeAction, onEdgeLabelMove }) {
   const byId = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes])
+  const [draggingLabel, setDraggingLabel] = useState(null) // { edgeId, startX, startY, baseOffset, liveOffset }
+
+  useEffect(() => {
+    if (!draggingLabel) return
+    function onMove(e) {
+      const dx = (e.clientX - draggingLabel.startX) / viewport.zoom
+      const dy = (e.clientY - draggingLabel.startY) / viewport.zoom
+      setDraggingLabel((prev) => prev && ({
+        ...prev,
+        liveOffset: { dx: prev.baseOffset.dx + dx, dy: prev.baseOffset.dy + dy },
+      }))
+    }
+    function onUp() {
+      setDraggingLabel((prev) => {
+        if (prev) onEdgeLabelMove?.(prev.edgeId, prev.liveOffset)
+        return null
+      })
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingLabel?.edgeId, viewport.zoom])
+
+  function positionOf(node) {
+    if (dragOverridePos && dragOverridePos.id === node.id) return dragOverridePos
+    return node.position
+  }
 
   function centerOf(node) {
-    return { x: node.position.x + NODE_WIDTH / 2, y: node.position.y + NODE_HEIGHT / 2 }
+    const pos = positionOf(node)
+    return { x: pos.x + NODE_WIDTH / 2, y: pos.y + NODE_HEIGHT / 2 }
   }
 
   function trimmedPath(fromNode, toNode) {
@@ -163,7 +211,7 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, o
     return curvedPath(p1.x, p1.y, p2.x, p2.y)
   }
 
-  // 중심 → 각 노드. 포커스 모드면 연결선(라벨/클릭), 아니면 회색 계층선.
+  // 중심 → 각 노드. 포커스 모드면 연결선(라벨/클릭), 아니면 계층용 회색 선.
   const centerLines = nodes
     .filter((n) => n.id !== centerId)
     .map((n) => {
@@ -172,6 +220,8 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, o
         id: `c-${n.id}`,
         edgeId: edge?.id,
         label: edge?.label,
+        color: edge?.color,
+        labelOffset: edge?.labelOffset,
         ...trimmedPath(byId[centerId], n),
       }
     })
@@ -179,7 +229,13 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, o
   // 형제↔형제 연결선(일반 모드에서만 채워짐)
   const siblingLines = siblingEdges
     .filter((e) => byId[e.source] && byId[e.target])
-    .map((e) => ({ id: e.id, label: e.label, ...trimmedPath(byId[e.source], byId[e.target]) }))
+    .map((e) => ({
+      id: e.id,
+      label: e.label,
+      color: e.color,
+      labelOffset: e.labelOffset,
+      ...trimmedPath(byId[e.source], byId[e.target]),
+    }))
 
   const labeledLines = [
     ...centerLines.filter((l) => l.edgeId),
@@ -189,9 +245,11 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, o
   return (
     <svg className="edge-overlay" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
       <defs>
-        <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-          <path d="M0,0 L0,6 L8,3 z" fill="#ff6d5a" />
-        </marker>
+        {['#ff6d5a', '#3b82f6', '#22c55e', '#a855f7', '#6b7280'].map((c) => (
+          <marker key={c} id={`arrow-${c.slice(1)}`} markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill={c} />
+          </marker>
+        ))}
       </defs>
       <g transform={`translate(${viewport.x}, ${viewport.y}) scale(${viewport.zoom})`}>
         {/* 계층용 회색 선 (포커스 모드가 아닌 중심→자식) */}
@@ -201,48 +259,73 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, o
             <path key={l.id} d={l.d} fill="none" stroke="#d7d9e3" strokeWidth={2} />
           ))}
 
-        {/* 라벨 있는 연결선 (코랄, 클릭 시 수정) */}
-        {labeledLines.map((l) => (
-          <g key={l.id}>
-            {/* 실제 보이는 선보다 넓은 투명 히트 영역 — 클릭하기 쉽게 */}
-            <path
-              d={l.d}
-              fill="none"
-              stroke="transparent"
-              strokeWidth={16}
-              style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
-              onClick={() => onEdgeAction?.(l.edgeId || l.id)}
-            />
-            <path d={l.d} fill="none" stroke="#ff6d5a" strokeWidth={2} markerEnd="url(#arrow)" />
-            {l.label && (
-              <g
-                style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+        {/* 라벨 있는 연결선 (색상 지정 가능, 클릭 시 수정) */}
+        {labeledLines.map((l) => {
+          const color = l.color || DEFAULT_EDGE_COLOR
+          const isDraggingThis = !!draggingLabel && draggingLabel.edgeId === (l.edgeId || l.id)
+          const offset = isDraggingThis ? draggingLabel.liveOffset : (l.labelOffset || { dx: 0, dy: 0 })
+          const labelX = l.midX + offset.dx
+          const labelY = l.midY + offset.dy
+          return (
+            <g key={l.id}>
+              {/* 실제 보이는 선보다 넓은 투명 히트 영역 — 클릭하기 쉽게 */}
+              <path
+                d={l.d}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={16}
+                style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
                 onClick={() => onEdgeAction?.(l.edgeId || l.id)}
-              >
-                <rect
-                  x={l.labelX - (l.label.length * 3.6 + 10)}
-                  y={l.labelY - 11}
-                  width={l.label.length * 7.2 + 20}
-                  height={22}
-                  rx={11}
-                  fill="#ffe6e0"
-                  stroke="#ff6d5a"
-                  strokeWidth={1}
-                />
-                <text
-                  x={l.labelX}
-                  y={l.labelY + 4}
-                  fill="#c9432f"
-                  fontSize={12}
-                  fontWeight={600}
-                  textAnchor="middle"
+              />
+              <path d={l.d} fill="none" stroke={color} strokeWidth={2} markerEnd={`url(#arrow-${color.slice(1)})`} />
+              {/* 라벨과 선 중점을 잇는 가는 안내선 (라벨을 옮겼을 때만) */}
+              {(offset.dx !== 0 || offset.dy !== 0) && (
+                <line x1={l.midX} y1={l.midY} x2={labelX} y2={labelY} stroke={color} strokeWidth={1} strokeDasharray="3,3" opacity={0.5} />
+              )}
+              {l.label && (
+                <g
+                  style={{ pointerEvents: 'auto', cursor: isDraggingThis ? 'grabbing' : 'grab' }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation()
+                    setDraggingLabel({
+                      edgeId: l.edgeId || l.id,
+                      startX: e.clientX,
+                      startY: e.clientY,
+                      baseOffset: l.labelOffset || { dx: 0, dy: 0 },
+                      liveOffset: l.labelOffset || { dx: 0, dy: 0 },
+                    })
+                  }}
+                  onClick={(e) => {
+                    // 드래그 없이 순수 클릭일 때만 수정창 오픈 (드래그 종료 시 클릭 이벤트가 같이 발생하는 걸 방지)
+                    if (draggingLabel) return
+                    onEdgeAction?.(l.edgeId || l.id)
+                  }}
                 >
-                  {l.label}
-                </text>
-              </g>
-            )}
-          </g>
-        ))}
+                  <rect
+                    x={labelX - (l.label.length * 3.6 + 10)}
+                    y={labelY - 11}
+                    width={l.label.length * 7.2 + 20}
+                    height={22}
+                    rx={11}
+                    fill={color + '22'}
+                    stroke={color}
+                    strokeWidth={1}
+                  />
+                  <text
+                    x={labelX}
+                    y={labelY + 4}
+                    fill={color}
+                    fontSize={12}
+                    fontWeight={600}
+                    textAnchor="middle"
+                  >
+                    {l.label}
+                  </text>
+                </g>
+              )}
+            </g>
+          )
+        })}
       </g>
     </svg>
   )
@@ -258,13 +341,17 @@ function MapViewInner({
   dragEnabled,
   onNodeAction,
   onEdgeAction,
+  onEdgeLabelMove,
   onBadgeClick,
   onNodeReparent,
+  onNodeReposition,
 }) {
   const [dropTargetId, setDropTargetId] = useState(null)
+  const [draggingId, setDraggingId] = useState(null)
+  const [dragOverridePos, setDragOverridePos] = useState(null) // { id, x, y } — 드래그 중 실시간 위치(엣지가 따라가도록)
   const nodes = useMemo(
-    () => buildRadialLayout(centerNode, children, connectSelection, connectionCountOf, onBadgeClick, dragEnabled, dropTargetId),
-    [centerNode, children, connectSelection, connectionCountOf, onBadgeClick, dragEnabled, dropTargetId],
+    () => buildRadialLayout(centerNode, children, connectSelection, connectionCountOf, onBadgeClick, dragEnabled, dropTargetId, draggingId),
+    [centerNode, children, connectSelection, connectionCountOf, onBadgeClick, dragEnabled, dropTargetId, draggingId],
   )
   const { setViewport: setReactFlowViewport } = useReactFlow()
   const wrapperRef = useRef(null)
@@ -300,15 +387,21 @@ function MapViewInner({
         onNodeClick={(_, node) => {
           if (node.id !== centerNode.id) onNodeAction(node.id)
         }}
+        onNodeDragStart={(_, node) => setDraggingId(node.id)}
         onNodeDrag={(_, node) => {
           const target = findOverlapTarget(node.id, node.position, nodes.filter((n) => n.id !== centerNode.id))
           setDropTargetId(target)
+          setDragOverridePos({ id: node.id, x: node.position.x, y: node.position.y })
         }}
         onNodeDragStop={(_, node) => {
           if (dropTargetId) {
             onNodeReparent?.(node.id, dropTargetId)
+          } else {
+            onNodeReposition?.(node.id, { x: node.position.x, y: node.position.y })
           }
           setDropTargetId(null)
+          setDraggingId(null)
+          setDragOverridePos(null)
         }}
         onMove={(_, vp) => setViewport(vp)}
         nodesConnectable={false}
@@ -323,7 +416,9 @@ function MapViewInner({
         siblingEdges={siblingEdges}
         centerEdgeMap={centerEdgeMap}
         viewport={viewport}
+        dragOverridePos={dragOverridePos}
         onEdgeAction={onEdgeAction}
+        onEdgeLabelMove={onEdgeLabelMove}
       />
     </div>
   )

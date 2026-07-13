@@ -80,8 +80,8 @@ export function useMapData() {
   )
 
   const addEdge = useCallback(
-    (source, target, label) => {
-      const newEdge = { id: makeId('edge'), source, target, label: label || '' }
+    (source, target, label, color) => {
+      const newEdge = { id: makeId('edge'), source, target, label: label || '', color: color || '#ff6d5a' }
       const nextEdges = [...edges, newEdge]
       setEdges(nextEdges)
       persist(nodes, nextEdges)
@@ -102,9 +102,22 @@ export function useMapData() {
 
   // 드래그로 다른 부모 밑으로 재배치. 연결선(edges)은 노드 id 기준이라 그대로 유지되고,
   // 하위 노드들도 parentId가 이 노드를 가리키므로 통째로 함께 이동한다.
+  // 새 부모 밑에서는 좌표가 의미 없어지므로 수동 위치(layout)는 초기화한다.
   const moveNode = useCallback(
     (nodeId, newParentId) => {
-      const nextNodes = nodes.map((n) => (n.id === nodeId ? { ...n, parentId: newParentId } : n))
+      const nextNodes = nodes.map((n) =>
+        n.id === nodeId ? { ...n, parentId: newParentId, layout: null } : n,
+      )
+      setNodes(nextNodes)
+      persist(nextNodes, edges)
+    },
+    [nodes, edges, persist],
+  )
+
+  // 형제 위가 아닌 빈 공간에 드래그해서 놓았을 때: 그 자리를 기억(수동 배치)
+  const repositionNode = useCallback(
+    (nodeId, layout) => {
+      const nextNodes = nodes.map((n) => (n.id === nodeId ? { ...n, layout } : n))
       setNodes(nextNodes)
       persist(nextNodes, edges)
     },
@@ -120,14 +133,19 @@ export function useMapData() {
     [nodes, edges, persist],
   )
 
+  // patch: { label?, color?, labelOffset? } — 넘어온 필드만 갱신
   const updateEdge = useCallback(
-    (edgeId, label) => {
-      const nextEdges = edges.map((e) => (e.id === edgeId ? { ...e, label } : e))
+    (edgeId, patch) => {
+      const nextEdges = edges.map((e) => (e.id === edgeId ? { ...e, ...patch } : e))
       setEdges(nextEdges)
       persist(nodes, nextEdges)
     },
     [nodes, edges, persist],
   )
 
-  return { nodes, edges, status, error, addNode, deleteNode, updateNode, moveNode, addEdge, deleteEdge, updateEdge }
+  return {
+    nodes, edges, status, error,
+    addNode, deleteNode, updateNode, moveNode, repositionNode,
+    addEdge, deleteEdge, updateEdge,
+  }
 }

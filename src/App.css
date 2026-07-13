@@ -176,6 +176,26 @@ body {
   background: #fff;
 }
 
+.color-swatch-row {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-swatch.selected {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--text);
+}
+
 .editor-actions {
   display: flex;
   justify-content: flex-end;
@@ -375,6 +395,13 @@ body {
   border: 2px dashed var(--accent);
   background: var(--accent-soft);
   transform: scale(1.05);
+}
+
+.n8n-node-dragging {
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.25) !important;
+  transform: scale(1.08) rotate(-1deg);
+  opacity: 0.9;
+  cursor: grabbing;
 }
 
 .detail-links {

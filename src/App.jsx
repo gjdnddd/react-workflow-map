@@ -16,7 +16,7 @@ const STATUS_LABEL = {
 }
 
 function App() {
-  const { nodes, edges, status, error, addNode, deleteNode, updateNode, moveNode, addEdge, deleteEdge, updateEdge } = useMapData()
+  const { nodes, edges, status, error, addNode, deleteNode, updateNode, moveNode, repositionNode, addEdge, deleteEdge, updateEdge } = useMapData()
   const { currentNode, children, goInto, goBack, goToRoot, goToNode, path } = useMapNavigation(nodes, 'hq')
 
   const [mode, setMode] = useState('navigate') // navigate | connect | delete | edit
@@ -64,7 +64,9 @@ function App() {
         connectedNodes.push(node)
       }
       // 같은 노드로 엣지가 여러 개면 첫 번째를 라벨/클릭 대표로 사용
-      if (!centerEdgeMap[otherId]) centerEdgeMap[otherId] = { id: e.id, label: e.label }
+      if (!centerEdgeMap[otherId]) {
+        centerEdgeMap[otherId] = { id: e.id, label: e.label, color: e.color, labelOffset: e.labelOffset }
+      }
     }
     return { connectedNodes, centerEdgeMap }
   }, [focusNode, edges, nodes])
@@ -149,6 +151,16 @@ function App() {
     }
   }
 
+  // 형제 위가 아닌 빈 자리에 드래그해서 놓았을 때: 위치만 자유롭게 저장
+  function handleNodeReposition(nodeId, pos) {
+    repositionNode(nodeId, pos)
+  }
+
+  // 연결선 라벨을 드래그해서 옮겼을 때 저장
+  function handleEdgeLabelMove(edgeId, labelOffset) {
+    updateEdge(edgeId, { labelOffset })
+  }
+
   return (
     <div className="app-shell">
       {inFocus ? (
@@ -216,6 +228,7 @@ function App() {
             centerEdgeMap={focusData.centerEdgeMap}
             onNodeAction={handleNodeAction}
             onEdgeAction={handleEdgeClick}
+            onEdgeLabelMove={handleEdgeLabelMove}
             onBadgeClick={onBadgeClick}
           />
         ) : isLeaf ? (
@@ -230,8 +243,10 @@ function App() {
             dragEnabled={mode === 'navigate'}
             onNodeAction={handleNodeAction}
             onEdgeAction={handleEdgeClick}
+            onEdgeLabelMove={handleEdgeLabelMove}
             onBadgeClick={onBadgeClick}
             onNodeReparent={handleNodeReparent}
+            onNodeReposition={handleNodeReposition}
           />
         )}
       </main>
@@ -268,8 +283,8 @@ function App() {
           sourceLabel={pendingEdge.source.label}
           targetLabel={pendingEdge.target.label}
           onCancel={() => setPendingEdge(null)}
-          onSubmit={(label) => {
-            addEdge(pendingEdge.source.id, pendingEdge.target.id, label)
+          onSubmit={(label, color) => {
+            addEdge(pendingEdge.source.id, pendingEdge.target.id, label, color)
             setPendingEdge(null)
             setMode('navigate')
           }}
@@ -281,9 +296,10 @@ function App() {
           sourceLabel={nodes.find((n) => n.id === editingEdge.source)?.label || '?'}
           targetLabel={nodes.find((n) => n.id === editingEdge.target)?.label || '?'}
           initialLabel={editingEdge.label}
+          initialColor={editingEdge.color}
           onCancel={() => setEditingEdge(null)}
-          onSubmit={(label) => {
-            updateEdge(editingEdge.id, label)
+          onSubmit={(label, color) => {
+            updateEdge(editingEdge.id, { label, color })
             setEditingEdge(null)
           }}
           onDelete={() => {
