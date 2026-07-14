@@ -203,6 +203,16 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, d
     return { x: pos.x + NODE_WIDTH / 2, y: pos.y + NODE_HEIGHT / 2 }
   }
 
+  // 라벨(pill)이 어떤 노드 카드 위에 겹치면, 그 노드를 드래그하려던 클릭을 라벨이
+  // 가로채 버린다(연결선만 움직이고 노드는 안 움직이는 문제). 겹칠 땐 라벨의
+  // 클릭/드래그를 비활성화해서 클릭이 아래 노드로 그대로 전달되게 한다.
+  function overlapsAnyNode(x, y, w, h) {
+    return nodes.some((n) => {
+      const p = positionOf(n)
+      return x < p.x + NODE_WIDTH && x + w > p.x && y < p.y + NODE_HEIGHT && y + h > p.y
+    })
+  }
+
   function trimmedPath(fromNode, toNode) {
     const c1 = centerOf(fromNode)
     const c2 = centerOf(toNode)
@@ -266,6 +276,9 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, d
           const offset = isDraggingThis ? draggingLabel.liveOffset : (l.labelOffset || { dx: 0, dy: 0 })
           const labelX = l.midX + offset.dx
           const labelY = l.midY + offset.dy
+          // 선의 중간 지점이 노드 카드와 겹치면(조밀한 배치에서 흔함) 그 투명 히트 영역이
+          // 노드 클릭/드래그를 가로챌 수 있으니, 겹칠 땐 히트 영역을 비활성화한다.
+          const lineHitBlocked = overlapsAnyNode(l.midX - 8, l.midY - 8, 16, 16)
           return (
             <g key={l.id}>
               {/* 실제 보이는 선보다 넓은 투명 히트 영역 — 클릭하기 쉽게 */}
@@ -274,7 +287,7 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, d
                 fill="none"
                 stroke="transparent"
                 strokeWidth={16}
-                style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                style={{ pointerEvents: lineHitBlocked ? 'none' : 'stroke', cursor: 'pointer' }}
                 onClick={() => onEdgeAction?.(l.edgeId || l.id)}
               />
               <path d={l.d} fill="none" stroke={color} strokeWidth={2} markerEnd={`url(#arrow-${color.slice(1)})`} />
@@ -282,30 +295,37 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, d
               {(offset.dx !== 0 || offset.dy !== 0) && (
                 <line x1={l.midX} y1={l.midY} x2={labelX} y2={labelY} stroke={color} strokeWidth={1} strokeDasharray="3,3" opacity={0.5} />
               )}
-              {l.label && (
-                <g
-                  style={{ pointerEvents: 'auto', cursor: isDraggingThis ? 'grabbing' : 'grab' }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation()
-                    setDraggingLabel({
-                      edgeId: l.edgeId || l.id,
-                      startX: e.clientX,
-                      startY: e.clientY,
-                      baseOffset: l.labelOffset || { dx: 0, dy: 0 },
-                      liveOffset: l.labelOffset || { dx: 0, dy: 0 },
-                    })
-                  }}
-                  onClick={(e) => {
-                    // 드래그 없이 순수 클릭일 때만 수정창 오픈 (드래그 종료 시 클릭 이벤트가 같이 발생하는 걸 방지)
-                    if (draggingLabel) return
-                    onEdgeAction?.(l.edgeId || l.id)
-                  }}
-                >
+              {l.label && (() => {
+                const pillX = labelX - (l.label.length * 3.6 + 10)
+                const pillY = labelY - 11
+                const pillW = l.label.length * 7.2 + 20
+                const pillH = 22
+                // 드래그 중인 라벨 자신은 항상 조작 가능해야 하니 겹침 검사에서 제외
+                const blocked = !isDraggingThis && overlapsAnyNode(pillX, pillY, pillW, pillH)
+                return (
+                  <g
+                    style={{ pointerEvents: blocked ? 'none' : 'auto', cursor: isDraggingThis ? 'grabbing' : 'grab' }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation()
+                      setDraggingLabel({
+                        edgeId: l.edgeId || l.id,
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        baseOffset: l.labelOffset || { dx: 0, dy: 0 },
+                        liveOffset: l.labelOffset || { dx: 0, dy: 0 },
+                      })
+                    }}
+                    onClick={(e) => {
+                      // 드래그 없이 순수 클릭일 때만 수정창 오픈 (드래그 종료 시 클릭 이벤트가 같이 발생하는 걸 방지)
+                      if (draggingLabel) return
+                      onEdgeAction?.(l.edgeId || l.id)
+                    }}
+                  >
                   <rect
-                    x={labelX - (l.label.length * 3.6 + 10)}
-                    y={labelY - 11}
-                    width={l.label.length * 7.2 + 20}
-                    height={22}
+                    x={pillX}
+                    y={pillY}
+                    width={pillW}
+                    height={pillH}
                     rx={11}
                     fill={color + '22'}
                     stroke={color}
@@ -321,8 +341,9 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, d
                   >
                     {l.label}
                   </text>
-                </g>
-              )}
+                  </g>
+                )
+              })()}
             </g>
           )
         })}
