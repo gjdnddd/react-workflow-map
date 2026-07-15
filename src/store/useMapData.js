@@ -124,6 +124,17 @@ export function useMapData() {
     [nodes, edges, persist],
   )
 
+  // 연결 포커스 화면 전용 위치 저장. 일반 계층 화면의 layout과는 별개 필드라
+  // 서로 영향을 주지 않는다.
+  const repositionNodeInFocus = useCallback(
+    (nodeId, focusLayout) => {
+      const nextNodes = nodes.map((n) => (n.id === nodeId ? { ...n, focusLayout } : n))
+      setNodes(nextNodes)
+      persist(nextNodes, edges)
+    },
+    [nodes, edges, persist],
+  )
+
   const deleteEdge = useCallback(
     (edgeId) => {
       const nextEdges = edges.filter((e) => e.id !== edgeId)
@@ -145,7 +156,7 @@ export function useMapData() {
 
   return {
     nodes, edges, status, error,
-    addNode, deleteNode, updateNode, moveNode, repositionNode,
+    addNode, deleteNode, updateNode, moveNode, repositionNode, repositionNodeInFocus,
     addEdge, deleteEdge, updateEdge,
   }
 }

@@ -16,7 +16,7 @@ const STATUS_LABEL = {
 }
 
 function App() {
-  const { nodes, edges, status, error, addNode, deleteNode, updateNode, moveNode, repositionNode, addEdge, deleteEdge, updateEdge } = useMapData()
+  const { nodes, edges, status, error, addNode, deleteNode, updateNode, moveNode, repositionNode, repositionNodeInFocus, addEdge, deleteEdge, updateEdge } = useMapData()
   const { currentNode, children, goInto, goBack, goToRoot, goToNode, path } = useMapNavigation(nodes, 'hq')
 
   const [mode, setMode] = useState('navigate') // navigate | connect | delete | edit
@@ -269,10 +269,14 @@ function App() {
             connectSelection={[]}
             connectionCountOf={connectionCountOf}
             centerEdgeMap={focusData.centerEdgeMap}
+            dragEnabled
+            reparentEnabled={false}
+            layoutField="focusLayout"
             onNodeAction={handleNodeAction}
             onEdgeAction={handleEdgeClick}
             onEdgeLabelMove={handleEdgeLabelMove}
             onBadgeClick={onBadgeClick}
+            onNodeReposition={(nodeId, pos) => repositionNodeInFocus(nodeId, pos)}
           />
         ) : isLeaf ? (
           <DetailPanel node={currentNode} onBack={goBack} />

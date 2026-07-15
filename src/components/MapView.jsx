@@ -42,7 +42,7 @@ function radiusFor(count) {
   return Math.max(BASE_RADIUS, circumference / (2 * Math.PI))
 }
 
-function buildRadialLayout(centerNode, children, connectSelection, countOf, onBadgeClick, dragEnabled, dropTargetId, draggingId) {
+function buildRadialLayout(centerNode, children, connectSelection, countOf, onBadgeClick, dragEnabled, dropTargetId, draggingId, layoutField = 'layout') {
   const centerFlowNode = {
     id: centerNode.id,
     type: 'mapNode',
@@ -64,7 +64,8 @@ function buildRadialLayout(centerNode, children, connectSelection, countOf, onBa
   const childFlowNodes = children.map((child, i) => {
     const angle = (2 * Math.PI * i) / children.length - Math.PI / 2
     const defaultPos = { x: radius * Math.cos(angle), y: radius * Math.sin(angle) }
-    const position = child.layout ? { x: child.layout.x, y: child.layout.y } : defaultPos
+    const savedLayout = child[layoutField]
+    const position = savedLayout ? { x: savedLayout.x, y: savedLayout.y } : defaultPos
     const selected = connectSelection?.includes(child.id)
     const classNames = [
       selected ? 'node-selected' : '',
@@ -360,6 +361,8 @@ function MapViewInner({
   connectionCountOf,
   centerEdgeMap,
   dragEnabled,
+  reparentEnabled = true,
+  layoutField = 'layout',
   onNodeAction,
   onEdgeAction,
   onEdgeLabelMove,
@@ -371,8 +374,8 @@ function MapViewInner({
   const [draggingId, setDraggingId] = useState(null)
   const [dragOverridePos, setDragOverridePos] = useState(null) // { id, x, y } — 드래그 중 실시간 위치(엣지가 따라가도록)
   const nodes = useMemo(
-    () => buildRadialLayout(centerNode, children, connectSelection, connectionCountOf, onBadgeClick, dragEnabled, dropTargetId, draggingId),
-    [centerNode, children, connectSelection, connectionCountOf, onBadgeClick, dragEnabled, dropTargetId, draggingId],
+    () => buildRadialLayout(centerNode, children, connectSelection, connectionCountOf, onBadgeClick, dragEnabled, dropTargetId, draggingId, layoutField),
+    [centerNode, children, connectSelection, connectionCountOf, onBadgeClick, dragEnabled, dropTargetId, draggingId, layoutField],
   )
   const { setViewport: setReactFlowViewport } = useReactFlow()
   const wrapperRef = useRef(null)
@@ -410,12 +413,14 @@ function MapViewInner({
         }}
         onNodeDragStart={(_, node) => setDraggingId(node.id)}
         onNodeDrag={(_, node) => {
-          const target = findOverlapTarget(node.id, node.position, nodes.filter((n) => n.id !== centerNode.id))
-          setDropTargetId(target)
+          if (reparentEnabled) {
+            const target = findOverlapTarget(node.id, node.position, nodes.filter((n) => n.id !== centerNode.id))
+            setDropTargetId(target)
+          }
           setDragOverridePos({ id: node.id, x: node.position.x, y: node.position.y })
         }}
         onNodeDragStop={(_, node) => {
-          if (dropTargetId) {
+          if (reparentEnabled && dropTargetId) {
             onNodeReparent?.(node.id, dropTargetId)
           } else {
             onNodeReposition?.(node.id, { x: node.position.x, y: node.position.y })
