@@ -96,8 +96,10 @@ function App() {
       if (!connectFrom) {
         setConnectFrom(nodeId)
       } else if (connectFrom !== nodeId) {
-        const source = children.find((c) => c.id === connectFrom)
-        const target = children.find((c) => c.id === nodeId)
+        // 첫 번째로 고른 노드는 그 사이 다른 브랜치로 이동했을 수 있으니, 현재 화면의
+        // children이 아니라 전체 nodes에서 찾는다 (형제 목록에 없어서 죽던 버그).
+        const source = nodes.find((c) => c.id === connectFrom)
+        const target = nodes.find((c) => c.id === nodeId)
         setPendingEdge({ source, target })
         setConnectFrom(null)
       }
