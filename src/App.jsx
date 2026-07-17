@@ -66,7 +66,10 @@ function App() {
       }
       // 같은 노드로 엣지가 여러 개면 첫 번째를 라벨/클릭 대표로 사용
       if (!centerEdgeMap[otherId]) {
-        centerEdgeMap[otherId] = { id: e.id, label: e.label, color: e.color, labelOffset: e.labelOffset }
+        centerEdgeMap[otherId] = {
+          id: e.id, label: e.label, color: e.color, labelOffset: e.labelOffset,
+          source: e.source, target: e.target,
+        }
       }
     }
     return { connectedNodes, centerEdgeMap }

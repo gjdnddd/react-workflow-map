@@ -223,17 +223,21 @@ function EdgeOverlay({ nodes, centerId, siblingEdges, centerEdgeMap, viewport, d
   }
 
   // 중심 → 각 노드. 포커스 모드면 연결선(라벨/클릭), 아니면 계층용 회색 선.
+  // 실제 연결선이 있는 경우, 화살표는 항상 저장된 source→target 방향대로 그린다
+  // (중심이 source든 target이든 상관없이 실제 방향이 고정되게).
   const centerLines = nodes
     .filter((n) => n.id !== centerId)
     .map((n) => {
       const edge = centerEdgeMap?.[n.id]
+      const fromNode = edge && edge.target === centerId ? n : byId[centerId]
+      const toNode = edge && edge.target === centerId ? byId[centerId] : n
       return {
         id: `c-${n.id}`,
         edgeId: edge?.id,
         label: edge?.label,
         color: edge?.color,
         labelOffset: edge?.labelOffset,
-        ...trimmedPath(byId[centerId], n),
+        ...trimmedPath(fromNode, toNode),
       }
     })
 
