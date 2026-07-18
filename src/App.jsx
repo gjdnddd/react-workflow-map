@@ -94,14 +94,19 @@ function App() {
     }
     if (mode === 'connect') {
       if (!connectFrom) {
+        // 첫 노드를 고른 뒤 바로 일반 탐색 모드로 돌아간다. 그래야 대상이 다른
+        // 브랜치에 있어도 중간 노드들을 평소처럼 드릴다운해서 지나갈 수 있다
+        // (그대로 두면 지나가는 모든 클릭이 "연결 대상"으로 오인되어버림).
         setConnectFrom(nodeId)
+        setMode('navigate')
       } else if (connectFrom !== nodeId) {
         // 첫 번째로 고른 노드는 그 사이 다른 브랜치로 이동했을 수 있으니, 현재 화면의
-        // children이 아니라 전체 nodes에서 찾는다 (형제 목록에 없어서 죽던 버그).
+        // children이 아니라 전체 nodes에서 찾는다.
         const source = nodes.find((c) => c.id === connectFrom)
         const target = nodes.find((c) => c.id === nodeId)
         setPendingEdge({ source, target })
         setConnectFrom(null)
+        setMode('navigate')
       }
       return
     }
@@ -128,7 +133,9 @@ function App() {
   }
 
   function toggleMode(next) {
-    setConnectFrom(null)
+    // 'connect'로 다시 들어가는 건 이미 골라둔 연결 시작 노드(connectFrom)로 대상을
+    // 선택하러 재진입하는 경우일 수 있으니 그대로 유지한다. 다른 모드는 초기화.
+    if (next !== 'connect') setConnectFrom(null)
     setMode((prev) => (prev === next ? 'navigate' : next))
   }
 
@@ -175,6 +182,8 @@ function App() {
   // "잘라내기"로 들고 있는 노드를, 지금 보고 있는(드릴다운/포커스로 도착한) 노드 밑으로 이동.
   // 화면에 동시에 안 보이는 먼 곳으로도 옮길 수 있음(형제 드래그의 한계를 보완).
   const movingNode = movingNodeId ? nodes.find((n) => n.id === movingNodeId) : null
+  // 연결 시작 노드 — 대상을 고를 때까지 화면 이동과 무관하게 유지
+  const connectFromNode = connectFrom ? nodes.find((n) => n.id === connectFrom) : null
   function handleMoveHere() {
     const targetId = inFocus ? focusNode.id : currentNode.id
     if (movingNodeId === targetId) {
@@ -261,6 +270,21 @@ function App() {
           <div className="move-banner-actions">
             <button onClick={handleMoveHere}>📌 여기로 이동</button>
             <button onClick={() => setMovingNodeId(null)}>취소</button>
+          </div>
+        </div>
+      )}
+
+      {connectFromNode && (
+        <div className="move-banner">
+          <span>
+            🔗 <strong>{connectFromNode.label}</strong> 에서 연결 시작 중 — 대상이 있는 화면으로 이동한 뒤
+            {mode === 'connect' ? ' 대상 노드를 클릭하세요' : ' 아래 버튼으로 대상을 선택하세요'}
+          </span>
+          <div className="move-banner-actions">
+            {mode !== 'connect' && (
+              <button onClick={() => setMode('connect')}>🎯 대상 선택</button>
+            )}
+            <button onClick={() => setConnectFrom(null)}>취소</button>
           </div>
         </div>
       )}
